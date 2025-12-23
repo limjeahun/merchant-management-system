@@ -1,53 +1,121 @@
 package com.worker.consumer
 
 import com.application.port.out.ExternalOcrPort
+import com.application.port.out.TextProcessorPort
 import com.common.event.OcrRequestEvent
+import com.common.ocr.DocumentType
 import com.domain.documents.OcrDocument
 import com.domain.repository.OcrCacheRepository
+import org.slf4j.LoggerFactory
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.stereotype.Component
+import org.springframework.web.client.RestClient
+import java.util.Base64
 
 @Component
 class OcrEventConsumer(
     private val externalOcrPort: ExternalOcrPort,
+    private val textProcessorPort: TextProcessorPort,
     private val ocrCacheRepository: OcrCacheRepository,
 ) {
+    private val logger = LoggerFactory.getLogger(OcrEventConsumer::class.java)
+    private val restClient = RestClient.create()
+
     /**
-     * 2 & 3. 이벤트 수신 -> OCR 처리 -> Redis 저장
+     * OCR 이벤트 처리 파이프라인
+     * 1. 이미지 다운로드
+     * 2. PaddleOCR로 텍스트 추출
+     * 3. Gemma2로 OCR 오류 보정
+     * 4. Gemma2로 문서 분류 및 필드 파싱
+     * 5. Redis에 결과 저장
      */
     @KafkaListener(topics = ["ocr-request-topic"], groupId = "ocr-worker-group")
     fun consumeOcrRequest(event: OcrRequestEvent) {
-        println("Processing Event: ${event.requestId}")
+        logger.info("Processing OCR Event: ${event.requestId}")
 
         try {
-            // Gemini 호출
-            val rawText = externalOcrPort.extractText(event.imageUrl)
-            // 파싱 로직 (간단한 예시)
-            val parsedData = parseOcrText(rawText, event.documentType)
-            // 결과 생성
+            // 1. 이미지 다운로드 (URL인 경우) 또는 Base64 디코딩
+            val imageBytes = downloadOrDecodeImage(event.imageUrl)
+            
+            // 2. PaddleOCR로 텍스트 추출
+            val ocrResult = externalOcrPort.extractText(imageBytes)
+            
+            if (!ocrResult.success) {
+                throw RuntimeException("OCR extraction failed: ${ocrResult.errorMessage}")
+            }
+            
+            logger.info("OCR extracted ${ocrResult.lines.size} lines for ${event.requestId}")
+            
+            // 3. Gemma2로 OCR 오류 보정
+            val correctedText = textProcessorPort.correctOcrErrors(ocrResult.fullText)
+            logger.debug("OCR text corrected for ${event.requestId}")
+            
+            // 4. Gemma2로 문서 분류
+            val documentType = textProcessorPort.classifyDocument(correctedText)
+            logger.info("Document classified as $documentType for ${event.requestId}")
+            
+            // 5. Gemma2로 필드 파싱
+            val parsedData = textProcessorPort.parseBusinessLicense(correctedText, documentType)
+            logger.info("Fields parsed for ${event.requestId}: ${parsedData.toMap().keys}")
+            
+            // 6. 결과 저장
             val result = OcrDocument(
                 requestId = event.requestId,
                 status = "COMPLETED",
-                rawJson = rawText,
-                parsedData = parsedData
+                rawJson = parsedData.toJson(),
+                parsedData = parsedData.toMap()
             )
-            // Redis 저장
             ocrCacheRepository.save(result)
+            
+            logger.info("OCR processing completed for ${event.requestId}")
+            
         } catch (e: Exception) {
-            // 실패 시 Redis에 실패 상태 저장
+            logger.error("OCR processing failed for ${event.requestId}: ${e.message}", e)
+            
             ocrCacheRepository.save(
-                OcrDocument(event.requestId, "FAILED")
+                OcrDocument(
+                    requestId = event.requestId,
+                    status = "FAILED",
+                    rawJson = """{"error": "${e.message}"}"""
+                )
             )
         }
     }
 
-    private fun parseOcrText(text: String, type: String): Map<String, String> {
-        // 실제로는 정규식 등을 이용해 이름, 주민번호 등을 파싱
-        return mapOf(
-            "name" to "홍길동",
-            "number" to "123456-1234567"
-        )
+    /**
+     * 이미지 URL에서 다운로드하거나 Base64 문자열을 디코딩합니다.
+     */
+    private fun downloadOrDecodeImage(imageUrl: String): ByteArray {
+        return when {
+            // Base64 데이터인 경우
+            imageUrl.startsWith("data:image") -> {
+                val base64Data = imageUrl.substringAfter("base64,")
+                Base64.getDecoder().decode(base64Data)
+            }
+            // 순수 Base64인 경우 (MIME prefix 없이)
+            !imageUrl.startsWith("http") && isBase64(imageUrl) -> {
+                Base64.getDecoder().decode(imageUrl)
+            }
+            // URL인 경우 다운로드
+            else -> {
+                restClient.get()
+                    .uri(imageUrl)
+                    .retrieve()
+                    .body(ByteArray::class.java)
+                    ?: throw RuntimeException("Failed to download image from: $imageUrl")
+            }
+        }
     }
 
-
+    /**
+     * 문자열이 Base64 인코딩인지 확인합니다.
+     */
+    private fun isBase64(str: String): Boolean {
+        return try {
+            Base64.getDecoder().decode(str)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
 }

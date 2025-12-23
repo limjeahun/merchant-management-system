@@ -49,6 +49,49 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_BROKER_ID: 1
 
+  # 5. Ollama (로컬 LLM - Gemma2)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: mms-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    # GPU 사용 시 아래 주석 해제 (NVIDIA GPU 필요)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:11434/api/tags" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # 6. Ollama 모델 초기화 (Gemma3 4B 자동 Pull)
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: mms-ollama-init
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: [ "/bin/sh", "-c" ]
+    command:
+      - |
+        echo "Waiting for Ollama to be ready..."
+        sleep 5
+        echo "Pulling Gemma3 4B model..."
+        ollama pull gemma3:4b
+        echo "Model pull complete!"
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    restart: "no"
+
 volumes:
   mysql-data:
   redis-data:
+  ollama-data:

@@ -46,9 +46,23 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "*"
-  # ===============================================
-  # Gemini API Key CONFIGURATION
-  # ===============================================
-google:
-  gemini:
-    api-key: ${GOOGLE_GEMINI_API_KEY} # 환경 변수로 주입
+
+# ===============================================
+# LOCAL OCR CONFIGURATION
+# ===============================================
+
+# Ollama (Gemma3 LLM) 설정
+# - Docker 환경: OLLAMA_BASE_URL=http://ollama:11434
+# - 로컬 환경: OLLAMA_BASE_URL=http://localhost:11434 (기본값)
+ollama:
+  base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+  model-name: gemma3:4b
+  timeout: 60s
+
+# PaddleOCR ONNX 모델 설정
+# 기본값: classpath 내 models/paddleocr 디렉토리
+# 외부 경로 사용 시: PADDLEOCR_MODEL_PATH 환경변수 설정
+paddleocr:
+  model-path: ${PADDLEOCR_MODEL_PATH:classpath:models/paddleocr}
+  detection-model: ch_PP-OCRv4_det_infer.onnx
+  recognition-model: korean_PP-OCRv3_rec_infer.onnx  # 한국어 Recognition 모델
