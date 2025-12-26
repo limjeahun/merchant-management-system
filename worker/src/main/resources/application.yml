@@ -51,8 +51,9 @@ spring:
 # LOCAL OCR CONFIGURATION
 # ===============================================
 
-# PaddleOCR ONNX 모델 설정 (ONNX Runtime 직접 사용)
+# PaddleOCR/RapidOCR 설정
 paddleocr:
+  api-url: ${PADDLEOCR_API_URL:http://localhost:9003}
   model-path: ${PADDLEOCR_MODEL_PATH:classpath:models/paddleocr}
   detection-model: ch_PP-OCRv4_det_infer.onnx
   recognition-model: korean_PP-OCRv3_rec_infer.onnx

@@ -58,13 +58,13 @@ services:
     volumes:
       - ollama-data:/root/.ollama
     # GPU 사용 시 아래 주석 해제 (NVIDIA GPU 필요)
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
     healthcheck:
       test: [ "CMD-SHELL", "ollama list || exit 1" ]
       interval: 30s
@@ -91,6 +91,22 @@ services:
     environment:
       OLLAMA_HOST: http://ollama:11434
     restart: "no"
+
+  # 7. RapidOCR API (한국어 OCR 서비스 - 자체 빌드)
+  rapidocr:
+    build:
+      context: .
+      dockerfile: docker/paddleocr/Dockerfile
+    container_name: mms-rapidocr
+    ports:
+      - "127.0.0.1:9003:9003" # localhost에서만 접근 가능
+    healthcheck:
+      test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:9003/health')\" || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s # 모델 로딩 시간 고려
+    restart: unless-stopped
 
 volumes:
   mysql-data:

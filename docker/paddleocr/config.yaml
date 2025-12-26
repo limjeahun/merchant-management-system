@@ -1,0 +1,31 @@
+# RapidOCR Configuration for Korean (Official PP-OCRv4)
+# 공식 PP-OCRv4 한국어 OCR 모델 설정
+
+Global:
+  text_score: 0.5
+  print_verbose: false
+  use_det: true
+  use_cls: true
+  use_rec: true
+
+Det:
+  model_path: models/ch_PP-OCRv4_det_infer.onnx
+  use_dnn: false
+  limit_side_len: 1280
+  limit_type: max
+  thresh: 0.3
+  box_thresh: 0.4
+  max_candidates: 1000
+  unclip_ratio: 1.6
+  score_mode: fast
+  use_dilate: false
+
+Cls:
+  cls_batch_num: 6
+  cls_thresh: 0.9
+
+Rec:
+  model_path: models/korean_PP-OCRv4_rec_fp16.onnx
+  rec_batch_num: 6
+  rec_img_shape: [3, 48, 320]
+  keys_path: models/korean_dict_v4.txt
