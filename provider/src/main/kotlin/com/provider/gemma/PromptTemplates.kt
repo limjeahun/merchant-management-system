@@ -1,114 +1,237 @@
 package com.provider.gemma
 
-/** Gemma2용 프롬프트 템플릿 사업자등록증 분류, 필드 파싱, OCR 오류 보정에 사용됩니다. */
+/**
+ * Gemma3용 프롬프트 템플릿 (사업자 유형별 분리)
+ *
+ * 개인사업자와 법인사업자 각각에 최적화된 OCR 보정 및 파싱 프롬프트를 제공합니다.
+ * - 자간 공백 병합 처리
+ * - 동일 라인 복수 항목 분리
+ * - 비즈니스 용어 교정
+ */
 object PromptTemplates {
 
-    /** 문서 유형 분류 프롬프트 */
-    val DOCUMENT_CLASSIFICATION =
+    // ============================================================
+    // 개인사업자 전용 프롬프트
+    // ============================================================
+
+    /** 개인사업자 OCR 보정 프롬프트 (깨진 문자 교정 방식) */
+    val INDIVIDUAL_OCR_CORRECTION =
             """
-        당신은 한국의 사업자등록증을 분석하는 전문가입니다.
-        다음 OCR 텍스트가 어떤 유형의 사업자등록증인지 분류하세요.
-        
-        [분류 기준]
-        - INDIVIDUAL: 개인사업자 (법인등록번호가 없음)
-        - CORPORATE: 법인사업자 (법인등록번호가 있음, 법인명/단체명 표기)
-        - UNKNOWN: 사업자등록증이 아니거나 판별 불가
-        
-        [OCR 텍스트]
+        ### ROLE
+        너는 OCR 텍스트 교정 전문가이다. PaddleOCR이 추출한 텍스트에서 **깨진 문자만** 교정하는 것이 임무이다.
+
+        ### 🎯 핵심 원칙: 깨진 문자만 교정
+        1. PaddleOCR 결과에서 **정상적인 한글, 숫자, 특수문자는 그대로 유지**하라
+        2. **의미없는 영문자 조합만** 이미지와 대조하여 실제 한글로 교정하라
+        3. 교정할 수 없으면 빈 문자열("")로 남겨라
+        4. **절대 새로운 정보를 지어내지 마라 (Hallucination 금지)**
+
+        ### 🔍 깨진 문자 패턴 (이미지 대조 필요)
+        다음 패턴이 보이면 이미지에서 해당 위치의 실제 한글을 읽어라:
+        - 무의미한 영문 조합: DObSUMMM, ZIYCYH, YSERI, YY, HO
+        - 단독 알파벳: H, C, L, O (문장 중간에 갑자기 나타나는 경우)
+        - 영문+한글 혼합 오류: "H 표 0:", "사 ZIYCYH", "Ri PU"
+        - 특수문자 오류: "H表O", "大表者" 등 한자 오인식
+
+        ### ✅ 정상 문자 (그대로 유지)
+        - 사업자등록번호: 123-45-67890 ← 숫자-하이픈 조합은 그대로
+        - 주소: 서울특별시 강남구 테헤란로 123 ← 정상 한글
+        - 날짜: 2020 년 01 월 01 일 ← 숫자+한글 조합
+        - 금액, 전화번호 등 숫자 데이터
+
+        ### 📋 필드별 교정 가이드
+        1. **상호**: "상호:" 뒤의 텍스트
+           - 깨진 예: "DObSUMMM" → 이미지에서 실제 상호명 확인
+        2. **대표자**: "대표자:" 또는 "대 표 자:" 뒤의 텍스트
+           - 깨진 예: "H", "ZIYCYH" → 이미지에서 실제 이름 확인
+        3. **개업연월일**: 날짜 형식 YYYY년 MM월 DD일
+        4. **사업장소재지**: 주소
+
+        ### 개인사업자 특성
+        - 개인 사업자는 '법인등록번호', '본점소재지'가 없음
+        - '주민등록번호'가 있으면 마스킹 (******-*******)
+
+        ### 자간 공백 병합
+        - '대    표    자' → '대표자'
+        - '사 업 장 소 재 지' → '사업장소재지'
+        - '개 업 연 월 일' → '개업연월일'
+
+        ### ⚠️ 검증 체크리스트 (출력 전 확인)
+        각 필드에 대해 반드시 확인하라:
+        □ 이 값이 OCR 원문에 있거나, 이미지에서 직접 확인했는가?
+        □ 내가 추측하거나 지어낸 값이 아닌가?
+        □ 확신이 없으면 빈 문자열("")로 남겼는가?
+
+        ### JSON 출력 (다른 설명 없이 JSON만 출력)
+        {
+          "documentType": "개인사업자",
+          "businessNumber": "OCR 원문의 등록번호 (정상이면 그대로)",
+          "merchantName": "교정된 상호명 (깨진 경우만 이미지 확인)",
+          "representativeName": "교정된 대표자명 (깨진 경우만 이미지 확인)",
+          "openingDate": "YYYY년 MM월 DD일",
+          "address": "사업장 소재지",
+          "businessType": "업태",
+          "businessItem": "종목",
+          "taxOffice": "세무서장"
+        }
+
+        ### OCR 텍스트 (깨진 문자만 교정 대상)
         {{text}}
-        
-        위 텍스트를 분석하고, 반드시 다음 중 하나만 출력하세요: INDIVIDUAL, CORPORATE, UNKNOWN
+
+        ### RESPONSE (JSON ONLY)
     """.trimIndent()
 
-    /** 개인사업자등록증 필드 파싱 프롬프트 */
+    /** 개인사업자 필드 파싱 프롬프트 */
     val INDIVIDUAL_FIELD_PARSING =
             """
-        당신은 한국의 개인사업자등록증을 분석하는 OCR 전문가입니다.
-        다음 OCR 텍스트에서 정보를 추출하여 JSON으로 반환하세요.
-        Markdown code block 없이 순수 JSON만 반환하세요.
-        
-        [추출 항목]
-        - merchantName: 상호
-        - businessNumber: 사업자등록번호 (XXX-XX-XXXXX 형식)
-        - representativeName: 대표자 성명
-        - address: 사업장 소재지
-        - businessType: 업태
-        - businessItem: 종목
-        - openingDate: 개업연월일 (YYYY-MM-DD 형식으로 변환)
-        
-        [OCR 텍스트]
+        ### ROLE
+        너는 대한민국 국세청의 개인사업자등록증 전문 검수관이다.
+        이미 1차 보정된 텍스트에서 최종 필드를 추출하는 것이 임무이다.
+
+        ### 추출 규칙
+        1. 각 필드를 정확히 추출하라.
+        2. 확인 불가능한 필드는 빈 문자열("")로 표기하라.
+        3. 없는 사실을 지어내지 마라.
+
+        ### OCR 텍스트
         {{text}}
-        
-        JSON 형식으로만 응답하세요:
+
+        ### JSON 출력 (다른 설명 없이 JSON만 출력)
+        {
+          "merchantName": "상호",
+          "businessNumber": "XXX-XX-XXXXX",
+          "representativeName": "대표자명",
+          "address": "사업장 소재지",
+          "businessType": "업태",
+          "businessItem": "종목",
+          "openingDate": "YYYY-MM-DD"
+        }
     """.trimIndent()
 
-    /** 법인사업자등록증 필드 파싱 프롬프트 */
+    // ============================================================
+    // 법인사업자 전용 프롬프트
+    // ============================================================
+
+    /** 법인사업자 OCR 보정 프롬프트 (깨진 문자 교정 방식) */
+    val CORPORATE_OCR_CORRECTION =
+            """
+        ### ROLE
+        너는 OCR 텍스트 교정 전문가이다. PaddleOCR이 추출한 텍스트에서 **깨진 문자만** 교정하는 것이 임무이다.
+
+        ### 🎯 핵심 원칙: 깨진 문자만 교정
+        1. PaddleOCR 결과에서 **정상적인 한글, 숫자, 특수문자는 그대로 유지**하라
+        2. **의미없는 영문자 조합만** 이미지와 대조하여 실제 한글로 교정하라
+        3. 교정할 수 없으면 빈 문자열("")로 남겨라
+        4. **절대 새로운 정보를 지어내지 마라 (Hallucination 금지)**
+
+        ### 🔍 깨진 문자 패턴 (이미지 대조 필요)
+        다음 패턴이 보이면 이미지에서 해당 위치의 실제 한글을 읽어라:
+        - 무의미한 영문 조합: DObSUMMM, ZIYCYH, YSERI, YY, HO
+        - 단독 알파벳: H, C, L, O (문장 중간에 갑자기 나타나는 경우)
+        - 영문+한글 혼합 오류: "H 표 0:", "사 ZIYCYH", "Ri PU"
+        - 특수문자 오류: "H表O", "大表者" 등 한자 오인식
+
+        ### ✅ 정상 문자 (그대로 유지)
+        - 사업자등록번호: 476-81-00434 ← 숫자-하이픈 조합은 그대로
+        - 주소: 경기도 남양주시 화도읍 비룡로524번길 32 ← 정상 한글
+        - 날짜: 2016 년 11 월 23 일 ← 숫자+한글 조합
+        - 금액, 전화번호 등 숫자 데이터
+
+        ### 📋 필드별 교정 가이드
+        1. **법인명(단체명)**: "법인명(단체명):" 또는 "상호:" 뒤의 텍스트
+           - 깨진 예: "DObSUMMM" → 이미지에서 실제 회사명 확인
+        2. **대표자**: "대표자:" 또는 "대 표 자:" 뒤의 텍스트
+           - 깨진 예: "H", "ZIYCYH" → 이미지에서 실제 이름 확인
+        3. **개업연월일**: 날짜 형식 YYYY년 MM월 DD일
+        4. **법인등록번호**: XXXXXX-XXXXXXX 형식 (숫자13자리)
+        5. **사업장소재지/본점소재지**: 주소
+
+        ### 자간 공백 병합
+        - '대    표    자' → '대표자'
+        - '법 인 등 록 번 호' → '법인등록번호'
+        - '개 업 연 월 일' → '개업연월일'
+        - '본 점 소 재 지' → '본점소재지'
+
+        ### ⚠️ 검증 체크리스트 (출력 전 확인)
+        각 필드에 대해 반드시 확인하라:
+        □ 이 값이 OCR 원문에 있거나, 이미지에서 직접 확인했는가?
+        □ 내가 추측하거나 지어낸 값이 아닌가?
+        □ 확신이 없으면 빈 문자열("")로 남겼는가?
+
+        ### JSON 출력 (다른 설명 없이 JSON만 출력)
+        {
+          "documentType": "법인사업자",
+          "businessNumber": "OCR 원문의 등록번호 (정상이면 그대로)",
+          "merchantName": "교정된 법인명 (깨진 경우만 이미지 확인)",
+          "representativeName": "교정된 대표자명 (깨진 경우만 이미지 확인)",
+          "openingDate": "YYYY년 MM월 DD일",
+          "corporateNumber": "XXXXXX-XXXXXXX",
+          "address": "사업장 소재지",
+          "headOfficeAddress": "본점 소재지",
+          "businessType": "업태",
+          "businessItem": "종목",
+          "taxOffice": "세무서장"
+        }
+
+        ### OCR 텍스트 (깨진 문자만 교정 대상)
+        {{text}}
+
+        ### RESPONSE (JSON ONLY)
+    """.trimIndent()
+
+    /** 법인사업자 필드 파싱 프롬프트 */
     val CORPORATE_FIELD_PARSING =
             """
-        당신은 한국의 법인사업자등록증을 분석하는 OCR 전문가입니다.
-        다음 OCR 텍스트에서 정보를 추출하여 JSON으로 반환하세요.
-        Markdown code block 없이 순수 JSON만 반환하세요.
-        
-        [추출 항목]
-        - merchantName: 법인명(단체명) 또는 상호
-        - businessNumber: 사업자등록번호 (XXX-XX-XXXXX 형식)
-        - representativeName: 대표자 성명
-        - address: 사업장 소재지
-        - businessType: 업태
-        - businessItem: 종목
-        - openingDate: 개업연월일 (YYYY-MM-DD 형식으로 변환)
-        - corporateNumber: 법인등록번호 (XXXXXX-XXXXXXX 형식)
-        - headOfficeAddress: 본점 소재지 (있는 경우)
-        
-        [OCR 텍스트]
+        ### ROLE
+        너는 대한민국 국세청의 법인사업자등록증 전문 검수관이다.
+        이미 1차 보정된 텍스트에서 최종 필드를 추출하는 것이 임무이다.
+
+        ### 추출 규칙
+        1. 각 필드를 정확히 추출하라.
+        2. 확인 불가능한 필드는 빈 문자열("")로 표기하라.
+        3. 없는 사실을 지어내지 마라.
+
+        ### OCR 텍스트
         {{text}}
-        
-        JSON 형식으로만 응답하세요:
+
+        ### JSON 출력 (다른 설명 없이 JSON만 출력)
+        {
+          "merchantName": "법인명 또는 상호",
+          "businessNumber": "XXX-XX-XXXXX",
+          "representativeName": "대표자명",
+          "address": "사업장 소재지",
+          "businessType": "업태",
+          "businessItem": "종목",
+          "openingDate": "YYYY-MM-DD",
+          "corporateNumber": "XXXXXX-XXXXXXX",
+          "headOfficeAddress": "본점 소재지"
+        }
     """.trimIndent()
 
-    /** OCR 오류 보정 프롬프트 (사업자등록증 최적화) */
-    val OCR_CORRECTION =
-            """
-        당신은 한국어 OCR 오류 보정 전문가입니다.
-        다음 OCR 텍스트에서 인식 오류를 보정하세요.
-        
-        [기본 보정 규칙]
-        1. 한글 자모가 잘못 인식된 경우 수정 (예: 들록 → 등록, 법인둥록번호 → 법인등록번호)
-        2. 숫자와 문자가 혼동된 경우 수정 (예: O → 0, l → 1, I → 1)
-        3. 띄어쓰기 오류 수정
-        4. 문맥에 맞지 않는 단어 수정
-        5. 사업자등록증 관련 용어 교정
-        
-        [사업자등록증 특화 보정]
-        - 국비철, 국세청, 굿세청, 국셰청 → 국세청
-        - 등족번호, 둥록번호, 등록버호, 등록번흐 → 등록번호
-        - 법인둥록, 법인들록, 법인등룩, 번인등록 → 법인등록
-        - 사업잦소재지, 사업장소재치, 업장소재지 → 사업장소재지
-        - 본점소개지, 본점소재치, 본정소재지 → 본점소재지
-        - 개업연얼일, 개업년월일, 개업연윌일 → 개업연월일
-        - 대포자, 대표지, 대푯자 → 대표자
-        - 법인멍, 법인녕, 법인몀 → 법인명
-        - 단체용폼, 단체용퓸, 담체용품 → 단체용품
-        - 사업의종류, 사업의촌류, 업의종류 → 사업의종류
-        - 업태소매, 업태소메, 엽태소매 → 업태소매
-        - 종목, 촌목, 종뫅 → 종목
-        
-        [숫자 형식 보정]
-        - 전화번호: 031-XXX-XXXX 또는 02-XXXX-XXXX 형식으로 보정
-        - 사업자등록번호: XXX-XX-XXXXX 형식으로 보정 (하이픈 추가)
-        - 법인등록번호: XXXXXX-XXXXXXX 형식으로 보정 (하이픈 추가)
-        - 날짜: YYYY년 MM월 DD일 형식으로 보정
-        
-        [원본 OCR 텍스트]
-        {{text}}
-        
-        보정된 텍스트만 출력하세요 (설명 없이):
-    """.trimIndent()
+    // ============================================================
+    // 공통 유틸리티
+    // ============================================================
 
     /** 프롬프트에 변수를 치환합니다. */
     fun render(template: String, variables: Map<String, String>): String {
         var result = template
         variables.forEach { (key, value) -> result = result.replace("{{$key}}", value) }
         return result
+    }
+
+    /** 사업자 유형에 따른 OCR 보정 프롬프트 선택 */
+    fun getOcrCorrectionPrompt(businessType: String): String {
+        return when (businessType.uppercase()) {
+            "CORPORATE" -> CORPORATE_OCR_CORRECTION
+            else -> INDIVIDUAL_OCR_CORRECTION
+        }
+    }
+
+    /** 사업자 유형에 따른 필드 파싱 프롬프트 선택 */
+    fun getFieldParsingPrompt(businessType: String): String {
+        return when (businessType.uppercase()) {
+            "CORPORATE" -> CORPORATE_FIELD_PARSING
+            else -> INDIVIDUAL_FIELD_PARSING
+        }
     }
 }

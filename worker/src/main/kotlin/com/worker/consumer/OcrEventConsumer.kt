@@ -21,43 +21,51 @@ class OcrEventConsumer(
     private val restClient = RestClient.create()
 
     /**
-     * OCR 이벤트 처리 파이프라인
+     * OCR 이벤트 처리 파이프라인 (간소화)
      * 1. 이미지 다운로드
-     * 2. PaddleOCR로 텍스트 추출
-     * 3. Gemma2로 OCR 오류 보정
-     * 4. Gemma2로 문서 분류 및 필드 파싱
-     * 5. Redis에 결과 저장
+     * 2. RapidOCR로 텍스트 추출
+     * 3. Gemma3로 OCR 보정 + 필드 파싱 (businessType 기반 프롬프트 사용)
+     * 4. Redis에 결과 저장
      */
     @KafkaListener(topics = ["mms.ocr.business-license.request"], groupId = "mms.ocr.worker-group")
     fun consumeOcrRequest(event: OcrRequestEvent) {
-        logger.info("Processing OCR Event: ${event.requestId}")
+        logger.info("=== OCR 처리 시작 ===")
+        logger.info("RequestId: ${event.requestId}")
+        logger.info("BusinessType: ${event.businessType}")
 
         try {
             // 1. 이미지 다운로드 (URL인 경우) 또는 Base64 디코딩
-            val imageBytes = downloadOrDecodeImage(event.imageUrl)
+            val rawImageBytes = downloadOrDecodeImage(event.imageUrl)
+            logger.info("이미지 로드 완료 (${rawImageBytes.size} bytes)")
 
-            // 2. PaddleOCR로 텍스트 추출
-            val ocrResult = ocrPort.extractText(imageBytes)
+            // 1.5. 이미지 전처리 (Gemma3 분석 정확도 향상)
+            val preprocessedBytes = com.provider.image.ImagePreprocessor.preprocess(rawImageBytes)
+            logger.info("이미지 전처리 완료 (${preprocessedBytes.size} bytes)")
+
+            // 2. RapidOCR로 텍스트 추출 (원본 이미지 사용)
+            val ocrResult = ocrPort.extractText(rawImageBytes)
 
             if (!ocrResult.success) {
                 throw RuntimeException("OCR extraction failed: ${ocrResult.errorMessage}")
             }
 
-            logger.info("OCR extracted ${ocrResult.fullText} lines for ${event.requestId}")
+            logger.info("=== RapidOCR 추출 결과 ===")
+            logger.info(ocrResult.fullText)
+            logger.info("==========================")
 
-            // 3. Gemma2로 OCR 오류 보정
-            val correctedText = textProcessorPort.correctOcrErrors(ocrResult.fullText)
-            logger.info("OCR text corrected $correctedText for ${event.requestId}")
+            // 3. Gemma3로 OCR 보정 + 필드 파싱 (전처리된 이미지 사용)
+            val parsedData =
+                    textProcessorPort.correctAndParse(
+                            text = ocrResult.fullText,
+                            businessType = event.businessType,
+                            imageBytes = preprocessedBytes
+                    )
 
-            // 4. Gemma2로 문서 분류
-            val documentType = textProcessorPort.classifyDocument(correctedText)
-            logger.info("Document classified as $documentType for ${event.requestId}")
+            logger.info("=== 최종 파싱 결과 [${event.requestId}] ===")
+            parsedData.toMap().forEach { (key, value) -> logger.info("  $key: $value") }
+            logger.info("========================================")
 
-            // 5. Gemma2로 필드 파싱
-            val parsedData = textProcessorPort.parseBusinessLicense(correctedText, documentType)
-            logger.info("Fields parsed for ${event.requestId}: ${parsedData.toMap().keys}")
-
-            // 6. 결과 저장
+            // 4. 결과 저장
             val result =
                     OcrDocument(
                             requestId = event.requestId,
@@ -67,9 +75,9 @@ class OcrEventConsumer(
                     )
             ocrCacheRepository.save(result)
 
-            logger.info("OCR processing completed for ${event.requestId}")
+            logger.info("OCR 처리 완료: ${event.requestId}")
         } catch (e: Exception) {
-            logger.error("OCR processing failed for ${event.requestId}: ${e.message}", e)
+            logger.error("OCR 처리 실패 [${event.requestId}]: ${e.message}", e)
 
             ocrCacheRepository.save(
                     OcrDocument(

@@ -48,8 +48,101 @@ else:
 print("RapidOCR initialized successfully!")
 
 
+def merge_spaced_korean_words(text):
+    """
+    공백으로 분리된 한글 단어 결합 (Text Chunking)
+    예: "도 소 매" -> "도소매"
+    """
+    import re
+    
+    # 한글 문자 사이의 단일 공백 제거 (한글+공백+한글 패턴)
+    # 예: "도 소 매" -> "도소매"
+    pattern = r'([\uac00-\ud7a3])\s+(?=[\uac00-\ud7a3])'
+    result = re.sub(pattern, r'\1', text)
+    
+    return result
+
+
+def merge_lines_by_y_coordinate(ocr_result):
+    """
+    Y 좌표 기반으로 같은 줄의 텍스트를 병합
+    RapidOCR 결과에서 boxes를 활용하여 줄 단위로 결합
+    """
+    if not ocr_result:
+        return []
+    
+    # (y중앙값, 텍스트, 신뢰도, box) 튜플 리스트 생성
+    lines_with_y = []
+    for item in ocr_result:
+        box = item[0]  # [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
+        text = item[1]
+        confidence = float(item[2]) if len(item) > 2 else 0.9
+        
+        # Y 중앙값 계산 (box의 상단/하단 평균)
+        y_center = (box[0][1] + box[2][1]) / 2
+        x_left = box[0][0]  # 왼쪽 X 좌표
+        
+        lines_with_y.append({
+            'y': y_center,
+            'x': x_left,
+            'text': text,
+            'confidence': confidence,
+            'box': box
+        })
+    
+    # Y 좌표로 정렬
+    lines_with_y.sort(key=lambda item: (item['y'], item['x']))
+    
+    # Y 좌표가 비슷한 항목들을 한 줄로 병합 (threshold: 15픽셀)
+    merged_lines = []
+    current_line = None
+    y_threshold = 15
+    
+    for item in lines_with_y:
+        if current_line is None:
+            current_line = {
+                'y': item['y'],
+                'texts': [(item['x'], item['text'])],
+                'confidences': [item['confidence']]
+            }
+        elif abs(item['y'] - current_line['y']) <= y_threshold:
+            # 같은 줄에 추가
+            current_line['texts'].append((item['x'], item['text']))
+            current_line['confidences'].append(item['confidence'])
+        else:
+            # 새 줄 시작
+            merged_lines.append(current_line)
+            current_line = {
+                'y': item['y'],
+                'texts': [(item['x'], item['text'])],
+                'confidences': [item['confidence']]
+            }
+    
+    if current_line:
+        merged_lines.append(current_line)
+    
+    # 각 줄의 텍스트를 X 좌표 순으로 정렬 후 결합
+    result = []
+    for line in merged_lines:
+        # X 좌표로 정렬
+        sorted_texts = sorted(line['texts'], key=lambda t: t[0])
+        merged_text = ' '.join([t[1] for t in sorted_texts])
+        
+        # 한글 공백 제거 적용
+        merged_text = merge_spaced_korean_words(merged_text)
+        
+        avg_confidence = sum(line['confidences']) / len(line['confidences'])
+        
+        result.append({
+            'text': merged_text,
+            'confidence': avg_confidence
+        })
+    
+    return result
+
+
 def preprocess_image(image_bytes):
-    """이미지 전처리: 대비 향상, 샤프닝, 노이즈 제거 (최적화됨)"""
+    """이미지 전처리: 대비 향상, 샤프닝, 노이즈 제거 (강화 버전)"""
     # 바이트 배열을 numpy 배열로 변환
     nparr = np.frombuffer(image_bytes, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -57,28 +150,44 @@ def preprocess_image(image_bytes):
     if img is None:
         return image_bytes
     
+    # 0. 업스케일 (먼저 수행 - 작은 이미지 처리 개선)
+    h, w = img.shape[:2]
+    if max(h, w) < 2000:
+        scale = 2.0
+        img = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+        print(f"  Image upscaled: {w}x{h} -> {int(w*scale)}x{int(h*scale)}")
+    
     # 1. 그레이스케일 변환
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     
-    # 2. 대비 향상 (CLAHE - 강화된 파라미터)
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+    # 2. 대비 향상 (CLAHE - 더 강한 파라미터)
+    clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(8, 8))
     enhanced = clahe.apply(gray)
     
-    # 3. 샤프닝 (Unsharp Masking - 텍스트 엣지 선명화)
-    gaussian = cv2.GaussianBlur(enhanced, (0, 0), 3)
-    sharpened = cv2.addWeighted(enhanced, 1.5, gaussian, -0.5, 0)
+    # 3. 노이즈 제거 (먼저 수행)
+    denoised = cv2.bilateralFilter(enhanced, 11, 17, 17)
     
-    # 4. 노이즈 제거 (Bilateral Filter - 엣지 보존)
-    denoised = cv2.bilateralFilter(sharpened, 9, 75, 75)
+    # 4. 적응형 이진화 (Adaptive Thresholding - 텍스트 추출에 효과적)
+    binary = cv2.adaptiveThreshold(
+        denoised, 255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY,
+        21,  # blockSize (홀수)
+        10   # C (상수)
+    )
     
-    # 5. 다시 3채널 컬러로 변환 (RapidOCR 입력용)
-    result = cv2.cvtColor(denoised, cv2.COLOR_GRAY2BGR)
+    # 5. 모폴로지 연산 (작은 노이즈 제거, 텍스트 연결)
+    kernel = np.ones((1, 1), np.uint8)
+    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
     
-    # 6. 업스케일 (과도한 확대 방지를 위해 1.5x 사용)
-    h, w = result.shape[:2]
-    if max(h, w) < 1500:
-        scale = 1.5
-        result = cv2.resize(result, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+    # 6. 샤프닝 (텍스트 엣지 선명화)
+    gaussian = cv2.GaussianBlur(binary, (0, 0), 2)
+    sharpened = cv2.addWeighted(binary, 1.5, gaussian, -0.5, 0)
+    
+    # 7. 다시 3채널 컬러로 변환 (RapidOCR 입력용)
+    result = cv2.cvtColor(sharpened, cv2.COLOR_GRAY2BGR)
+    
+    print(f"  Image preprocessing completed: {result.shape[1]}x{result.shape[0]}")
     
     # numpy 배열을 바이트로 변환
     _, encoded = cv2.imencode('.png', result)
@@ -161,14 +270,28 @@ def process_ocr(image_bytes):
     full_text_parts = []
     
     if result:
-        for line in result:
-            text = line[1]
-            confidence = float(line[2]) if len(line) > 2 else 0.9
-            lines.append({
-                "text": text,
-                "confidence": confidence
-            })
-            full_text_parts.append(text)
+        # 좌표 기반 라인 병합 시도
+        try:
+            merged = merge_lines_by_y_coordinate(result)
+            if merged:
+                lines = merged
+                full_text_parts = [line['text'] for line in merged]
+                print(f"  Text chunking applied: {len(result)} items -> {len(merged)} lines")
+            else:
+                raise ValueError("Merge returned empty")
+        except Exception as e:
+            print(f"  Text chunking fallback: {e}")
+            # 기존 방식으로 fallback
+            for line in result:
+                text = line[1]
+                confidence = float(line[2]) if len(line) > 2 else 0.9
+                # 한글 공백 제거 적용
+                text = merge_spaced_korean_words(text)
+                lines.append({
+                    "text": text,
+                    "confidence": confidence
+                })
+                full_text_parts.append(text)
     
     full_text = "\n".join(full_text_parts)
     

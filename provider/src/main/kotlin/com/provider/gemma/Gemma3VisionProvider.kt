@@ -20,8 +20,9 @@ import org.springframework.stereotype.Component
 @Component
 class Gemma3VisionProvider(
         @Value("\${ollama.base-url:http://localhost:11434}") private val ollamaBaseUrl: String,
-        @Value("\${ollama.model-name:gemma3:4b}") private val modelName: String,
-        @Value("\${ollama.timeout:120s}") private val timeout: String
+        @Value("\${ollama.model-name:gemma3:12b}") private val modelName: String,
+        @Value("\${ollama.timeout:120s}") private val timeout: String,
+        @Value("\${ollama.temperature:0.1}") private val temperature: Double
 ) : VisionAiPort {
 
     private val logger = LoggerFactory.getLogger(Gemma3VisionProvider::class.java)
@@ -49,6 +50,7 @@ class Gemma3VisionProvider(
                             .baseUrl(ollamaBaseUrl)
                             .modelName(modelName)
                             .timeout(Duration.ofSeconds(timeoutSeconds))
+                            .temperature(temperature)
                             .build()
 
             logger.info(

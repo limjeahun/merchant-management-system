@@ -73,7 +73,7 @@ services:
       start_period: 60s # Ollama 초기화 시간 대기
     restart: unless-stopped
 
-  # 6. Ollama 모델 초기화 (Gemma3 4B 자동 Pull)
+  # 6. Ollama 모델 초기화 (Gemma3 12B 자동 Pull)
   ollama-init:
     image: ollama/ollama:latest
     container_name: mms-ollama-init
@@ -85,8 +85,8 @@ services:
       - |
         echo "Waiting for Ollama to be ready..."
         sleep 5
-        echo "Pulling Gemma3 4B model..."
-        ollama pull gemma3:4b
+        echo "Pulling Gemma3 12B model..."
+        ollama pull gemma3:12b
         echo "Model pull complete!"
     environment:
       OLLAMA_HOST: http://ollama:11434
