@@ -300,6 +300,8 @@ def process_ocr(image_bytes):
     
     # 로깅
     print(f"=== OCR Result ===")
+    print(f"  Full Text Preview:\n{full_text}")
+    print(f"  ------------------")
     print(f"  Lines detected: {len(lines)}")
     print(f"  Estimated OCR Success: {success_rate*100:.1f}% ({level})")
     print(f"  Details: korean_ratio={details['korean_ratio']:.1%}, "

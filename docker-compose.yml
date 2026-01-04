@@ -133,12 +133,12 @@ services:
       start_period: 180s # Pororo 모델 로딩 시간 (더 길게)
     restart: unless-stopped
 
-  # 9. OnnxTR OCR API (다국어 OCR - DocTR ONNX)
-  onnxtr:
+  # 9. EasyOCR API (한국어 OCR - EasyOCR)
+  easyocr:
     build:
       context: .
-      dockerfile: docker/onnxtr/Dockerfile
-    container_name: mms-onnxtr
+      dockerfile: docker/easyocr/Dockerfile
+    container_name: mms-easyocr
     ports:
       - "127.0.0.1:9005:9005"
     healthcheck:
@@ -146,7 +146,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 120s
+      start_period: 180s # EasyOCR 모델 로딩 시간 고려
     restart: unless-stopped
 
 volumes:

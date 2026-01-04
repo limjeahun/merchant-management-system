@@ -71,8 +71,8 @@ PaddleOCR은 ONNX 형식의 딥러닝 모델을 사용하여 이미지에서 텍
 
 | 모델 | 파일명 | 용도 | 크기 |
 |------|--------|------|------|
-| Detection | `ch_PP-OCRv4_det_infer.onnx` | 텍스트 영역 검출 | ~4MB |
-| Recognition | `ch_PP-OCRv4_rec_infer.onnx` | 문자 인식 | ~10MB |
+| Detection | `PP-OCRv5_det.onnx` | 텍스트 영역 검출 | ~84MB |
+| Recognition | `korean_PP-OCRv5_rec.onnx` | 문자 인식 | ~13MB |
 
 ### 모델 저장 위치
 
@@ -80,8 +80,8 @@ PaddleOCR은 ONNX 형식의 딥러닝 모델을 사용하여 이미지에서 텍
 
 ```
 provider/src/main/resources/models/paddleocr/
-├── ch_PP-OCRv4_det_infer.onnx
-├── ch_PP-OCRv4_rec_infer.onnx
+├── PP-OCRv5_det.onnx
+├── korean_PP-OCRv5_rec.onnx
 └── README.md
 ```
 
@@ -100,17 +100,17 @@ $env:PADDLEOCR_MODEL_PATH = "D:\models\paddleocr"
 # 프로젝트 루트에서 실행
 $modelPath = "provider\src\main\resources\models\paddleocr"
 
-# Detection 모델 다운로드
+# Detection 모델 다운로드 (PP-OCRv5)
 Write-Host "Downloading Detection Model..."
 Invoke-WebRequest `
-    -Uri "https://huggingface.co/onnx-community/PaddleOCR/resolve/main/ch_PP-OCRv4_det_infer.onnx" `
-    -OutFile "$modelPath\ch_PP-OCRv4_det_infer.onnx"
+    -Uri "https://huggingface.co/marsena/paddleocr-onnx-models/resolve/main/PP-OCRv5_server_det_infer.onnx" `
+    -OutFile "$modelPath\PP-OCRv5_det.onnx"
 
-# Recognition 모델 다운로드
+# Recognition 모델 다운로드 (PP-OCRv5 Korean)
 Write-Host "Downloading Recognition Model..."
 Invoke-WebRequest `
-    -Uri "https://huggingface.co/onnx-community/PaddleOCR/resolve/main/ch_PP-OCRv4_rec_infer.onnx" `
-    -OutFile "$modelPath\ch_PP-OCRv4_rec_infer.onnx"
+    -Uri "https://huggingface.co/monkt/paddleocr-onnx/resolve/main/languages/korean/rec.onnx" `
+    -OutFile "$modelPath\korean_PP-OCRv5_rec.onnx"
 
 # 다운로드 확인
 Get-ChildItem $modelPath
@@ -123,12 +123,12 @@ Get-ChildItem $modelPath
 MODEL_PATH="provider/src/main/resources/models/paddleocr"
 
 # Detection 모델
-curl -L -o "$MODEL_PATH/ch_PP-OCRv4_det_infer.onnx" \
-    "https://huggingface.co/onnx-community/PaddleOCR/resolve/main/ch_PP-OCRv4_det_infer.onnx"
+curl -L -o "$MODEL_PATH/PP-OCRv5_det.onnx" \
+    "https://huggingface.co/marsena/paddleocr-onnx-models/resolve/main/PP-OCRv5_server_det_infer.onnx"
 
 # Recognition 모델
-curl -L -o "$MODEL_PATH/ch_PP-OCRv4_rec_infer.onnx" \
-    "https://huggingface.co/onnx-community/PaddleOCR/resolve/main/ch_PP-OCRv4_rec_infer.onnx"
+curl -L -o "$MODEL_PATH/korean_PP-OCRv5_rec.onnx" \
+    "https://huggingface.co/monkt/paddleocr-onnx/resolve/main/languages/korean/rec.onnx"
 
 # 다운로드 확인
 ls -la $MODEL_PATH

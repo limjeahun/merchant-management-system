@@ -6,19 +6,19 @@ import com.common.ocr.OcrRawResult
 data class EnsembleOcrResult(
         val paddleOcr: OcrRawResult,
         val pororo: OcrRawResult,
-        val onnxtr: OcrRawResult
+        val easyOcr: OcrRawResult
 ) {
     /** 모든 엔진이 성공했는지 확인 */
     val allSuccess: Boolean
-        get() = paddleOcr.success && pororo.success && onnxtr.success
+        get() = paddleOcr.success && pororo.success && easyOcr.success
 
     /** 성공한 엔진 수 */
     val successCount: Int
-        get() = listOf(paddleOcr, pororo, onnxtr).count { it.success }
+        get() = listOf(paddleOcr, pororo, easyOcr).count { it.success }
 
     /** 성공한 결과만 필터링 */
     val successfulResults: List<OcrRawResult>
-        get() = listOf(paddleOcr, pororo, onnxtr).filter { it.success }
+        get() = listOf(paddleOcr, pororo, easyOcr).filter { it.success }
 
     /** 가장 높은 신뢰도의 결과 반환 */
     val bestResult: OcrRawResult?
@@ -36,8 +36,8 @@ data class EnsembleOcrResult(
         appendLine("[Pororo]")
         appendLine(if (pororo.success) pororo.fullText else "(실패: ${pororo.errorMessage})")
         appendLine()
-        appendLine("[OnnxTR]")
-        appendLine(if (onnxtr.success) onnxtr.fullText else "(실패: ${onnxtr.errorMessage})")
+        appendLine("[EasyOCR]")
+        appendLine(if (easyOcr.success) easyOcr.fullText else "(실패: ${easyOcr.errorMessage})")
     }
 
     companion object {

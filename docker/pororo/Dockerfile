@@ -26,6 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir \
     flask \
     flask-cors \
+    "numpy<2.0.0" \
     pillow \
     opencv-python-headless
 
@@ -40,6 +41,10 @@ RUN pip install --no-cache-dir pororo || echo "Pororo pip install failed, will t
 
 # Pororo 실패 시 EasyOCR fallback
 RUN pip install --no-cache-dir easyocr
+
+# PyTorch 1.13.1과 호환되는 NumPy 버전 강제 설치 (EasyOCR이 덮어쓰는 것 방지)
+# PyTorch 1.13.x는 NumPy 1.23.x와 호환됨
+RUN pip install --no-cache-dir "numpy==1.23.5"
 
 # 서버 스크립트 복사
 COPY docker/pororo/pororo_server.py /app/

@@ -2,7 +2,7 @@ package com.provider.ensemble
 
 import com.application.port.out.OcrPort
 import com.common.ocr.OcrRawResult
-import com.provider.onnxtr.OnnxtrOcrProvider
+import com.provider.easyocr.EasyOcrProvider
 import com.provider.paddleocr.PaddleOcrApiProvider
 import com.provider.pororo.PororoOcrProvider
 import jakarta.annotation.PostConstruct
@@ -17,13 +17,13 @@ import org.springframework.stereotype.Component
 /**
  * 앙상블 OCR Provider
  *
- * 3개의 OCR 엔진(PaddleOCR, Pororo, OnnxTR)을 병렬로 실행하고 결과를 통합하여 Gemma3 교차검증에 전달
+ * 3개의 OCR 엔진(PaddleOCR, Pororo, EasyOCR)을 병렬로 실행하고 결과를 통합하여 Gemma3 교차검증에 전달
  */
 @Component
 class EnsembleOcrProvider(
         private val paddleOcrProvider: PaddleOcrApiProvider,
         private val pororoOcrProvider: PororoOcrProvider,
-        private val onnxtrOcrProvider: OnnxtrOcrProvider,
+        private val easyOcrProvider: EasyOcrProvider,
         @Value("\${ensemble.timeout:90}") private val timeoutSeconds: Long,
         @Value("\${ensemble.enabled:true}") private val ensembleEnabled: Boolean
 ) : OcrPort {
@@ -99,21 +99,21 @@ class EnsembleOcrProvider(
                         executor
                 )
 
-        val onnxtrFuture =
+        val easyOcrFuture =
                 CompletableFuture.supplyAsync(
                         {
                             runCatching {
-                                logger.info("[OnnxTR] 시작...")
-                                val result = onnxtrOcrProvider.extractText(imageBytes)
-                                logger.info("[OnnxTR] 완료 (${result.lines.size}줄)")
+                                logger.info("[EasyOCR] 시작...")
+                                val result = easyOcrProvider.extractText(imageBytes)
+                                logger.info("[EasyOCR] 완료 (${result.lines.size}줄)")
                                 result
                             }
                                     .getOrElse { e ->
-                                        logger.error("[OnnxTR] 실패: ${e.message}")
+                                        logger.error("[EasyOCR] 실패: ${e.message}")
                                         OcrRawResult(
                                                 success = false,
                                                 errorMessage = e.message ?: "Unknown",
-                                                engine = "onnxtr"
+                                                engine = "easyocr"
                                         )
                                     }
                         },
@@ -121,7 +121,7 @@ class EnsembleOcrProvider(
                 )
 
         // 모든 Future 완료 대기 (타임아웃 적용)
-        val allFutures = CompletableFuture.allOf(paddleFuture, pororoFuture, onnxtrFuture)
+        val allFutures = CompletableFuture.allOf(paddleFuture, pororoFuture, easyOcrFuture)
 
         try {
             allFutures.get(timeoutSeconds, TimeUnit.SECONDS)
@@ -141,19 +141,19 @@ class EnsembleOcrProvider(
                 pororoFuture.getNow(
                         OcrRawResult(success = false, errorMessage = "Timeout", engine = "pororo")
                 )
-        val onnxtrResult =
-                onnxtrFuture.getNow(
-                        OcrRawResult(success = false, errorMessage = "Timeout", engine = "onnxtr")
+        val easyOcrResult =
+                easyOcrFuture.getNow(
+                        OcrRawResult(success = false, errorMessage = "Timeout", engine = "easyocr")
                 )
 
         val elapsed = System.currentTimeMillis() - startTime
-        val ensemble = EnsembleOcrResult(paddleResult, pororoResult, onnxtrResult)
+        val ensemble = EnsembleOcrResult(paddleResult, pororoResult, easyOcrResult)
 
         logger.info("=== 앙상블 OCR 완료 (${elapsed}ms) ===")
         logger.info("  성공: ${ensemble.successCount}/3")
         logger.info("  PaddleOCR: ${if (paddleResult.success) "✓" else "✗"}")
         logger.info("  Pororo: ${if (pororoResult.success) "✓" else "✗"}")
-        logger.info("  OnnxTR: ${if (onnxtrResult.success) "✓" else "✗"}")
+        logger.info("  EasyOCR: ${if (easyOcrResult.success) "✓" else "✗"}")
 
         return ensemble
     }
@@ -165,7 +165,7 @@ class EnsembleOcrProvider(
                         runCatching { paddleOcrProvider.extractText(ByteArray(0)).success }
                                 .getOrDefault(false),
                 "pororo" to pororoOcrProvider.isHealthy(),
-                "onnxtr" to onnxtrOcrProvider.isHealthy()
+                "easyocr" to easyOcrProvider.isHealthy()
         )
     }
 }
