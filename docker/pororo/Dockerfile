@@ -40,11 +40,15 @@ RUN pip install --no-cache-dir \
 RUN pip install --no-cache-dir pororo || echo "Pororo pip install failed, will try alternative"
 
 # Pororo 실패 시 EasyOCR fallback
-RUN pip install --no-cache-dir easyocr
+# NumPy 버전을 먼저 고정한 후 EasyOCR 설치 (--no-deps로 NumPy 덮어쓰기 방지)
+RUN pip install --no-cache-dir "numpy==1.23.5" && \
+    pip install --no-cache-dir --no-deps easyocr && \
+    pip install --no-cache-dir python-bidi pyclipper shapely scikit-image PyYAML
 
-# PyTorch 1.13.1과 호환되는 NumPy 버전 강제 설치 (EasyOCR이 덮어쓰는 것 방지)
-# PyTorch 1.13.x는 NumPy 1.23.x와 호환됨
-RUN pip install --no-cache-dir "numpy==1.23.5"
+# NumPy 버전 재확인 및 PyTorch 호환성 검증
+RUN pip install --no-cache-dir "numpy==1.23.5" --force-reinstall && \
+    python -c "import numpy as np; print(f'NumPy version: {np.__version__}')" && \
+    python -c "import torch; import numpy as np; a = torch.tensor([1.0]); print('PyTorch-NumPy OK')"
 
 # 서버 스크립트 복사
 COPY docker/pororo/pororo_server.py /app/

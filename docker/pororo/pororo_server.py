@@ -35,24 +35,19 @@ except ImportError as e:
 except Exception as e:
     print(f"✗ Pororo initialization failed: {e}")
 
-# 2. EasyOCR fallback
+# 2. EasyOCR fallback (CPU 모드 우선 - GPU 메모리를 Ollama와 공유하므로)
 if ocr is None:
-    print("Trying EasyOCR fallback...")
+    print("Trying EasyOCR fallback (CPU mode to avoid GPU OOM)...")
     try:
         import easyocr
-        ocr = easyocr.Reader(['ko', 'en'], gpu=True)
-        engine_name = "easyocr"
-        print("✓ EasyOCR (GPU) initialized successfully!")
+        # CPU 모드를 기본으로 사용 (GPU는 Ollama가 점유)
+        ocr = easyocr.Reader(['ko', 'en'], gpu=False)
+        engine_name = "easyocr-cpu"
+        print("✓ EasyOCR (CPU) initialized successfully!")
     except Exception as e:
-        print(f"✗ EasyOCR GPU failed: {e}")
-        try:
-            ocr = easyocr.Reader(['ko', 'en'], gpu=False)
-            engine_name = "easyocr-cpu"
-            print("✓ EasyOCR (CPU) initialized successfully!")
-        except Exception as e2:
-            print(f"✗ EasyOCR CPU also failed: {e2}")
-            ocr = None
-            engine_name = None
+        print(f"✗ EasyOCR CPU failed: {e}")
+        ocr = None
+        engine_name = None
 
 print("=" * 50)
 print(f"Final engine: {engine_name}")
@@ -162,8 +157,23 @@ def ocr_endpoint():
                     lines = [{"text": full_text, "confidence": 0.95}]
                     
             elif engine_name in ["easyocr", "easyocr-cpu"]:
-                # EasyOCR 실행
-                result = ocr.readtext(temp_path)
+                # EasyOCR 실행 - CUDA OOM 발생 시 CPU fallback
+                try:
+                    result = ocr.readtext(temp_path)
+                except RuntimeError as cuda_err:
+                    if "CUDA" in str(cuda_err) or "out of memory" in str(cuda_err):
+                        print(f"GPU memory error, falling back to CPU: {cuda_err}")
+                        # GPU 메모리 정리
+                        import torch
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+                        # CPU로 재시도
+                        import easyocr
+                        cpu_reader = easyocr.Reader(['ko', 'en'], gpu=False)
+                        result = cpu_reader.readtext(temp_path)
+                    else:
+                        raise cuda_err
+                        
                 if result:
                     lines = [{"text": item[1], "confidence": float(item[2])} for item in result]
                     full_text = '\n'.join([item[1] for item in result])

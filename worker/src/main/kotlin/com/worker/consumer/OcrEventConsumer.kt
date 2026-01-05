@@ -25,7 +25,7 @@ class OcrEventConsumer(
     /**
      * OCR 이벤트 처리 파이프라인 (앙상블 버전)
      * 1. 이미지 다운로드
-     * 2. 3개 OCR 엔진 병렬 실행 (PaddleOCR, Pororo, OnnxTR)
+     * 2. 3개 OCR 엔진 병렬 실행 (PaddleOCR, Pororo, EasyOCR)
      * 3. Gemma3로 교차검증 + 필드 파싱
      * 4. Redis에 결과 저장
      */
@@ -51,7 +51,7 @@ class OcrEventConsumer(
                     "  Pororo: ${if (ensembleResult.pororo.success) "${ensembleResult.pororo.lines.size}줄" else "실패"}"
             )
             logger.info(
-                    "  OnnxTR: ${if (ensembleResult.onnxtr.success) "${ensembleResult.onnxtr.lines.size}줄" else "실패"}"
+                    "  EasyOCR: ${if (ensembleResult.easyOcr.success) "${ensembleResult.easyOcr.lines.size}줄" else "실패"}"
             )
             logger.info("============================")
 
