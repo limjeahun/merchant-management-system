@@ -142,7 +142,12 @@ def merge_lines_by_y_coordinate(ocr_result):
 
 
 def preprocess_image(image_bytes):
-    """이미지 전처리: 대비 향상, 샤프닝, 노이즈 제거 (강화 버전)"""
+    """
+    이미지 전처리: 가벼운 처리만 적용 (이진화 제거)
+    
+    Note: 강한 이진화 처리는 사업자등록증의 배경 무늬와 국세청 마크로 인해
+    텍스트가 깨지는 문제가 발생하므로, 업스케일 + CLAHE 대비 향상만 적용
+    """
     # 바이트 배열을 numpy 배열로 변환
     nparr = np.frombuffer(image_bytes, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -150,7 +155,7 @@ def preprocess_image(image_bytes):
     if img is None:
         return image_bytes
     
-    # 0. 업스케일 (먼저 수행 - 작은 이미지 처리 개선)
+    # 0. 업스케일 (작은 이미지 처리 개선)
     h, w = img.shape[:2]
     if max(h, w) < 2000:
         scale = 2.0
@@ -160,34 +165,17 @@ def preprocess_image(image_bytes):
     # 1. 그레이스케일 변환
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     
-    # 2. 대비 향상 (CLAHE - 더 강한 파라미터)
-    clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(8, 8))
+    # 2. 대비 향상 (CLAHE - 가벼운 파라미터로 조정)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     enhanced = clahe.apply(gray)
     
-    # 3. 노이즈 제거 (먼저 수행)
-    denoised = cv2.bilateralFilter(enhanced, 11, 17, 17)
+    # 3. 가벼운 노이즈 제거
+    denoised = cv2.bilateralFilter(enhanced, 5, 50, 50)
     
-    # 4. 적응형 이진화 (Adaptive Thresholding - 텍스트 추출에 효과적)
-    binary = cv2.adaptiveThreshold(
-        denoised, 255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY,
-        21,  # blockSize (홀수)
-        10   # C (상수)
-    )
+    # 4. 다시 3채널 컬러로 변환 (RapidOCR 입력용)
+    result = cv2.cvtColor(denoised, cv2.COLOR_GRAY2BGR)
     
-    # 5. 모폴로지 연산 (작은 노이즈 제거, 텍스트 연결)
-    kernel = np.ones((1, 1), np.uint8)
-    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
-    
-    # 6. 샤프닝 (텍스트 엣지 선명화)
-    gaussian = cv2.GaussianBlur(binary, (0, 0), 2)
-    sharpened = cv2.addWeighted(binary, 1.5, gaussian, -0.5, 0)
-    
-    # 7. 다시 3채널 컬러로 변환 (RapidOCR 입력용)
-    result = cv2.cvtColor(sharpened, cv2.COLOR_GRAY2BGR)
-    
-    print(f"  Image preprocessing completed: {result.shape[1]}x{result.shape[0]}")
+    print(f"  Image preprocessing completed (light): {result.shape[1]}x{result.shape[0]}")
     
     # numpy 배열을 바이트로 변환
     _, encoded = cv2.imencode('.png', result)
@@ -261,7 +249,7 @@ def health():
 
 def process_ocr(image_bytes):
     """OCR 처리 공통 함수"""
-    # 이미지 전처리
+    # 가벼운 이미지 전처리 (CLAHE 대비 향상 + 업스케일만)
     processed_bytes = preprocess_image(image_bytes)
     
     result, elapsed = ocr(processed_bytes)

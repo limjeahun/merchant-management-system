@@ -46,6 +46,11 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "*"
+        # Kafka Consumer 타임아웃 설정 (긴 OCR 처리를 위해 증가)
+        max.poll.interval.ms: 600000       # 10분 - poll() 간격 최대 시간
+        session.timeout.ms: 60000          # 60초 - 세션 타임아웃
+        heartbeat.interval.ms: 20000       # 20초 - 하트비트 간격
+        max.poll.records: 1                # 한 번에 1개 메시지만 처리 (긴 처리 시간 대응)
 
 # ===============================================
 # LOCAL OCR CONFIGURATION
@@ -74,9 +79,9 @@ pororo:
   api-url: ${PORORO_API_URL:http://localhost:9004}
   timeout: 60s
 
-# OnnxTR OCR 설정 (DocTR ONNX)
-onnxtr:
-  api-url: ${ONNXTR_API_URL:http://localhost:9005}
+# EasyOCR 설정
+easyocr:
+  api-url: ${EASYOCR_API_URL:http://localhost:9005}
   timeout: 60s
 
 # 앙상블 OCR 설정

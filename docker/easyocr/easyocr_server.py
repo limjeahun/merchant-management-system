@@ -1,6 +1,6 @@
 """
 EasyOCR Flask Server
-한국어 + 영어 OCR 서비스 (기존 OnnxTR API와 호환)
+한국어 + 영어 OCR 서비스
 """
 
 import io
