@@ -26,7 +26,7 @@ spring:
     show-sql: true
     properties:
       hibernate:
-        format_sql: true
+        "format_sql": true
   # ===============================================
   # Redis CONFIGURATION
   # ===============================================
@@ -42,3 +42,5 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        max.request.size: 26214400  # 25MB (이미지 Base64 전송용)

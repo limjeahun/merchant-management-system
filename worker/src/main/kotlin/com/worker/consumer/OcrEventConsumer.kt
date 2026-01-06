@@ -40,8 +40,11 @@ class OcrEventConsumer(
             val rawImageBytes = downloadOrDecodeImage(event.imageUrl)
             logger.info("이미지 로드 완료 (${rawImageBytes.size} bytes)")
 
-            // 2. 앙상블 OCR 실행 (3개 엔진 병렬)
-            val ensembleResult = ensembleOcrProvider.extractTextParallel(rawImageBytes)
+            // 2. 앙상블 OCR 실행 (3개 엔진 병렬 - Coroutines)
+            val ensembleResult =
+                    kotlinx.coroutines.runBlocking {
+                        ensembleOcrProvider.extractTextParallel(rawImageBytes)
+                    }
 
             logger.info("=== 앙상블 OCR 결과 요약 ===")
             logger.info(
@@ -64,10 +67,9 @@ class OcrEventConsumer(
             val parsedData =
                     textProcessorPort.crossValidateAndParse(
                             ensembleResults = ensembleResultsText,
+                            documentType = event.documentType,
                             businessType = event.businessType
                     )
-
-            logger.info("=== 최종 파싱 결과 [${event.requestId}] ===")
             parsedData.toMap().forEach { (key, value) -> logger.info("  $key: $value") }
             logger.info("========================================")
 

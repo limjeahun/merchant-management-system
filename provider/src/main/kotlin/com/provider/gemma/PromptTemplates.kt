@@ -328,6 +328,94 @@ object PromptTemplates {
     """.trimIndent()
 
     // ============================================================
+    // 운전면허증 전용 프롬프트
+    // ============================================================
+
+    /** 운전면허증 OCR 보정 프롬프트 */
+    val DRIVER_LICENSE_OCR_CORRECTION =
+            """
+        ### ROLE
+        너는 대한민국 운전면허증 OCR 텍스트 교정 전문가이다. OCR이 추출한 텍스트에서 **깨진 문자만** 교정하는 것이 임무이다.
+
+        ### 🎯 핵심 원칙
+        1. 정상적인 한글, 숫자, 특수문자는 그대로 유지
+        2. 깨진 문자만 교정 (무의미한 영문 조합 등)
+        3. 교정할 수 없으면 빈 문자열("")로 남겨라
+        4. **절대 새로운 정보를 지어내지 마라 (Hallucination 금지)**
+
+        ### 📋 운전면허증 필드
+        1. **이름**: 성명
+        2. **주민등록번호**: XXXXXX-XXXXXXX (뒷자리 마스킹 가능)
+        3. **면허번호**: XX-XX-XXXXXX-XX 형식
+        4. **면허종류**: 1종보통, 2종보통, 1종대형 등
+        5. **주소**: 거주지 주소
+        6. **발급일**: YYYY.MM.DD 또는 YYYY년 MM월 DD일
+        7. **암호일련번호**: 면허증 하단의 일련번호
+
+        ### 자간 공백 병합
+        - '운 전 면 허 증' → '운전면허증'
+        - '면 허 번 호' → '면허번호'
+
+        ### JSON 출력 (다른 설명 없이 JSON만 출력)
+        {
+          "name": "성명",
+          "rrn": "주민등록번호 (마스킹 가능)",
+          "licenseNumber": "면허번호",
+          "licenseType": "면허종류 (1종보통, 2종보통 등)",
+          "address": "주소",
+          "issueDate": "YYYY-MM-DD",
+          "serialNumber": "암호일련번호"
+        }
+
+        ### OCR 텍스트
+        {{text}}
+
+        ### RESPONSE (JSON ONLY)
+    """.trimIndent()
+
+    // ============================================================
+    // 주민등록증 전용 프롬프트
+    // ============================================================
+
+    /** 주민등록증 OCR 보정 프롬프트 */
+    val ID_CARD_OCR_CORRECTION =
+            """
+        ### ROLE
+        너는 대한민국 주민등록증 OCR 텍스트 교정 전문가이다. OCR이 추출한 텍스트에서 **깨진 문자만** 교정하는 것이 임무이다.
+
+        ### 🎯 핵심 원칙
+        1. 정상적인 한글, 숫자, 특수문자는 그대로 유지
+        2. 깨진 문자만 교정 (무의미한 영문 조합 등)
+        3. 교정할 수 없으면 빈 문자열("")로 남겨라
+        4. **절대 새로운 정보를 지어내지 마라 (Hallucination 금지)**
+        5. **개인정보 보호**: 주민등록번호 뒷자리는 마스킹 처리
+
+        ### 📋 주민등록증 필드
+        1. **이름**: 성명
+        2. **주민등록번호**: XXXXXX-******* (뒷자리 마스킹 필수)
+        3. **주소**: 거주지 주소
+        4. **발급일**: YYYY.MM.DD 또는 YYYY년 MM월 DD일
+        5. **발급기관**: 시/군/구청
+
+        ### 자간 공백 병합
+        - '주 민 등 록 증' → '주민등록증'
+
+        ### JSON 출력 (다른 설명 없이 JSON만 출력)
+        {
+          "name": "성명",
+          "rrn": "XXXXXX-******* (뒷자리 마스킹)",
+          "address": "주소",
+          "issueDate": "YYYY-MM-DD",
+          "issuer": "발급기관"
+        }
+
+        ### OCR 텍스트
+        {{text}}
+
+        ### RESPONSE (JSON ONLY)
+    """.trimIndent()
+
+    // ============================================================
     // 공통 유틸리티
     // ============================================================
 
@@ -338,15 +426,21 @@ object PromptTemplates {
         return result
     }
 
-    /** 사업자 유형에 따른 OCR 보정 프롬프트 선택 */
-    fun getOcrCorrectionPrompt(businessType: String): String {
-        return when (businessType.uppercase()) {
-            "CORPORATE" -> CORPORATE_OCR_CORRECTION
-            else -> INDIVIDUAL_OCR_CORRECTION
+    /** 문서 유형에 따른 OCR 보정 프롬프트 선택 */
+    fun getOcrCorrectionPrompt(documentType: String, businessType: String = "CORPORATE"): String {
+        return when (documentType.uppercase()) {
+            "DRIVER_LICENSE" -> DRIVER_LICENSE_OCR_CORRECTION
+            "ID_CARD" -> ID_CARD_OCR_CORRECTION
+            "BUSINESS_LICENSE" ->
+                    when (businessType.uppercase()) {
+                        "CORPORATE" -> CORPORATE_OCR_CORRECTION
+                        else -> INDIVIDUAL_OCR_CORRECTION
+                    }
+            else -> CORPORATE_OCR_CORRECTION // 기본값
         }
     }
 
-    /** 사업자 유형에 따른 필드 파싱 프롬프트 선택 */
+    /** 사업자 유형에 따른 필드 파싱 프롬프트 선택 (사업자등록증 전용) */
     fun getFieldParsingPrompt(businessType: String): String {
         return when (businessType.uppercase()) {
             "CORPORATE" -> CORPORATE_FIELD_PARSING
@@ -355,10 +449,18 @@ object PromptTemplates {
     }
 
     /** 사업자 유형에 따른 앙상블 교차검증 프롬프트 선택 */
-    fun getEnsembleCrossValidationPrompt(businessType: String): String {
-        return when (businessType.uppercase()) {
-            "CORPORATE" -> ENSEMBLE_CROSS_VALIDATION_CORPORATE
-            else -> ENSEMBLE_CROSS_VALIDATION_INDIVIDUAL
+    fun getEnsembleCrossValidationPrompt(
+            documentType: String,
+            businessType: String = "CORPORATE"
+    ): String {
+        return when (documentType.uppercase()) {
+            "DRIVER_LICENSE" -> DRIVER_LICENSE_OCR_CORRECTION // 운전면허증은 별도 앙상블 없음
+            "ID_CARD" -> ID_CARD_OCR_CORRECTION // 주민등록증은 별도 앙상블 없음
+            else ->
+                    when (businessType.uppercase()) {
+                        "CORPORATE" -> ENSEMBLE_CROSS_VALIDATION_CORPORATE
+                        else -> ENSEMBLE_CROSS_VALIDATION_INDIVIDUAL
+                    }
         }
     }
 }

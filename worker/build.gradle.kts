@@ -8,6 +8,9 @@ dependencies {
     implementation("org.springframework.kafka:spring-kafka")
     implementation("org.springframework.boot:spring-boot-starter-web")
 
+    // Kotlin Coroutines
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
+
     // JPA
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 

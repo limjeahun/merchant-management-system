@@ -4,6 +4,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web") // RestClient
     implementation("org.springframework.boot:spring-boot-starter-webflux") // WebClient for async
 
+    // Kotlin Coroutines
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
+
     // ONNX Runtime - PaddleOCR 모델 추론용
     implementation("com.microsoft.onnxruntime:onnxruntime:1.17.0")
 

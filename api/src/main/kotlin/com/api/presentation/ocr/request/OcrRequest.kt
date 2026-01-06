@@ -16,7 +16,7 @@ data class OcrRequest(
         @Schema(
                 description = "문서 유형",
                 example = "BUSINESS_LICENSE",
-                allowableValues = ["ID_CARD", "BUSINESS_LICENSE"],
+                allowableValues = ["ID_CARD", "BUSINESS_LICENSE", "DRIVER_LICENSE"],
                 required = true
         )
         val type: String,
@@ -29,12 +29,12 @@ data class OcrRequest(
         val businessType: String = "CORPORATE",
 ) {
 
-    fun toOcrCommand(): OcrCommand {
-        return OcrCommand(
-                requestId = UUID.randomUUID().toString(),
-                imageUrl = this.imageUrl,
-                documentType = this.type,
-                businessType = this.businessType,
-        )
-    }
+        fun toOcrCommand(): OcrCommand {
+                return OcrCommand(
+                        requestId = UUID.randomUUID().toString(),
+                        imageUrl = this.imageUrl,
+                        documentType = this.type,
+                        businessType = this.businessType,
+                )
+        }
 }
