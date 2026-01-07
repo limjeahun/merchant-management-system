@@ -9,7 +9,7 @@
 ![Next.js](https://img.shields.io/badge/Next.js-16.0.10-000000?style=flat&logo=next.js&logoColor=white)
 ![TensorFlow.js](https://img.shields.io/badge/TensorFlow.js-4.22.0-FF6F00?style=flat&logo=tensorflow&logoColor=white)
 
-> 📂 **프로젝트 위치**
+> 📂 **GitHub 저장소**
 > - **Frontend**: [limjeahun/OCR](https://github.com/limjeahun/OCR)
 > - **Backend**: 현재 저장소 ([limjeahun/Merchant-Management-System](https://github.com/limjeahun/Merchant-Management-System))
 
