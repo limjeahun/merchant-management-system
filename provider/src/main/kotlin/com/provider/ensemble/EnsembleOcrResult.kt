@@ -40,6 +40,49 @@ data class EnsembleOcrResult(
         appendLine(if (easyOcr.success) easyOcr.fullText else "(실패: ${easyOcr.errorMessage})")
     }
 
+    /**
+     * OCR 품질 점수 계산 (0.0 ~ 1.0)
+     * - 성공한 엔진 수: 40%
+     * - 평균 텍스트 길이: 30%
+     * - 평균 한글 비율: 30%
+     */
+    fun calculateQualityScore(): Double {
+        // 1. 성공한 엔진 비율 (0~1)
+        val engineSuccessRate = successCount / 3.0
+
+        // 2. 평균 텍스트 길이 점수 (최소 100자 이상이면 1.0)
+        val avgTextLength =
+                successfulResults.map { it.fullText.length }.average().takeIf { !it.isNaN() } ?: 0.0
+        val textLengthScore = (avgTextLength / 100.0).coerceAtMost(1.0)
+
+        // 3. 평균 한글 비율
+        val avgKoreanRatio =
+                successfulResults.map { calculateKoreanRatio(it.fullText) }.average().takeIf {
+                    !it.isNaN()
+                }
+                        ?: 0.0
+
+        // 가중 평균
+        return (engineSuccessRate * 0.4) + (textLengthScore * 0.3) + (avgKoreanRatio * 0.3)
+    }
+
+    /** 품질이 낮은지 확인 (점수 < 0.3) */
+    val isLowQuality: Boolean
+        get() = calculateQualityScore() < 0.3
+
+    /** 품질 점수와 함께 상세 로그용 문자열 반환 */
+    fun getQualityReport(): String {
+        val score = calculateQualityScore()
+        val avgKorean =
+                successfulResults.map { calculateKoreanRatio(it.fullText) }.average().takeIf {
+                    !it.isNaN()
+                }
+                        ?: 0.0
+        val avgLength =
+                successfulResults.map { it.fullText.length }.average().takeIf { !it.isNaN() } ?: 0.0
+        return "품질점수: ${String.format("%.1f", score * 100)}%, 엔진성공: $successCount/3, 평균길이: ${avgLength.toInt()}자, 한글비율: ${String.format("%.1f", avgKorean * 100)}%"
+    }
+
     companion object {
         /** 한글 비율 계산 */
         fun calculateKoreanRatio(text: String): Double {

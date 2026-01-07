@@ -56,7 +56,22 @@ class OcrEventConsumer(
             logger.info(
                     "  EasyOCR: ${if (ensembleResult.easyOcr.success) "${ensembleResult.easyOcr.lines.size}줄" else "실패"}"
             )
+            logger.info("  ${ensembleResult.getQualityReport()}")
             logger.info("============================")
+
+            // 2.5. 품질 검사 - 임계값 미달 시 LOW_QUALITY 반환
+            if (ensembleResult.isLowQuality) {
+                logger.warn("OCR 품질 미달 - LOW_QUALITY 상태 반환")
+                ocrCacheRepository.save(
+                        OcrDocument(
+                                requestId = event.requestId,
+                                status = "LOW_QUALITY",
+                                rawJson =
+                                        """{"error": "OCR 인식률이 낮습니다. 더 선명한 이미지로 다시 시도해 주세요.", "qualityReport": "${ensembleResult.getQualityReport()}"}"""
+                        )
+                )
+                return
+            }
 
             // 3. Gemma3로 교차검증 + 필드 파싱
             val ensembleResultsText = ensembleResult.toPromptFormat()
