@@ -2,11 +2,11 @@ package com.worker.consumer
 
 import com.application.port.out.TextProcessorPort
 import com.common.event.OcrRequestEvent
+import com.common.util.getLogger
 import com.domain.documents.OcrDocument
 import com.domain.repository.OcrCacheRepository
 import com.provider.ensemble.EnsembleOcrProvider
 import java.util.Base64
-import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.kafka.annotation.KafkaListener
 import org.springframework.stereotype.Component
@@ -19,7 +19,7 @@ class OcrEventConsumer(
         private val ocrCacheRepository: OcrCacheRepository,
         @Value("\${ensemble.enabled:true}") private val ensembleEnabled: Boolean
 ) {
-    private val logger = LoggerFactory.getLogger(OcrEventConsumer::class.java)
+    private val logger = getLogger()
     private val restClient = RestClient.create()
 
     /**

@@ -63,12 +63,23 @@ paddleocr:
   detection-model: ch_PP-OCRv4_det_infer.onnx
   recognition-model: korean_PP-OCRv3_rec_infer.onnx
 
-# Ollama (Gemma3 - 백업용)
+# Ollama (Gemma3 - LangChain4j용)
 ollama:
   base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
   model-name: gemma3:12b
   timeout: 300s
   temperature: 0.1  # 낮은 값 = 일관된 출력 (OCR용 권장: 0.0~0.3)
+
+# ===============================================
+# SPRING AI CONFIGURATION (Primary)
+# ===============================================
+spring.ai:
+  ollama:
+    base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+    chat:
+      model: gemma3:12b
+      options:
+        temperature: 0.1
 
 # ===============================================
 # ENSEMBLE OCR CONFIGURATION

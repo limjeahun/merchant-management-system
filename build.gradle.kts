@@ -19,6 +19,14 @@ subprojects {
 
     repositories {
         mavenCentral()
+        maven { url = uri("https://repo.spring.io/milestone") }
+    }
+
+    // Spring AI BOM - 모든 서브모듈에서 Spring AI 의존성 버전 관리
+    the<io.spring.gradle.dependencymanagement.dsl.DependencyManagementExtension>().apply {
+        imports {
+            mavenBom("org.springframework.ai:spring-ai-bom:1.0.0-M5")
+        }
     }
 
     dependencies {

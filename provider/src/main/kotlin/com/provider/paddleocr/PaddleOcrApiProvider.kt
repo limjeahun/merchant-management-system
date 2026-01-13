@@ -5,45 +5,54 @@ import com.common.ocr.OcrRawResult
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.annotation.PostConstruct
+import java.time.Duration
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Primary
 import org.springframework.core.io.ByteArrayResource
-import org.springframework.http.HttpEntity
-import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
+import org.springframework.http.client.SimpleClientHttpRequestFactory
 import org.springframework.stereotype.Component
 import org.springframework.util.LinkedMultiValueMap
-import org.springframework.web.client.RestTemplate
+import org.springframework.web.client.RestClient
 
 /**
  * RapidOCR Docker API Provider
  *
  * Docker 컨테이너로 실행되는 RapidOCR 서비스를 호출하여 OCR 수행 모델과 사전이 100% 일치하는 검증된 환경에서 실행됨
+ *
+ * Spring Boot 3.2+ 스타일의 RestClient 사용
  */
 @Primary
 @Component
 class PaddleOcrApiProvider(
-        @Value("\${paddleocr.api-url:http://localhost:9003}") private val apiUrl: String
+        @Value("\${paddleocr.api-url:http://localhost:9003}") private val apiUrl: String,
+        @Value("\${paddleocr.timeout:60}") private val timeoutSeconds: Long = 60
 ) : OcrPort {
 
     private val logger = LoggerFactory.getLogger(PaddleOcrApiProvider::class.java)
-    private val restTemplate = RestTemplate()
+    private val restClient: RestClient
     private val objectMapper = ObjectMapper()
+
+    init {
+        // 타임아웃 설정 (이미지 처리에 시간 소요되므로 충분히 길게)
+        val factory =
+                SimpleClientHttpRequestFactory().apply {
+                    setConnectTimeout(Duration.ofSeconds(timeoutSeconds))
+                    setReadTimeout(Duration.ofSeconds(timeoutSeconds))
+                }
+        restClient = RestClient.builder().baseUrl(apiUrl).requestFactory(factory).build()
+    }
 
     @PostConstruct
     fun initialize() {
-        logger.info("RapidOCR API Provider initialized with URL: $apiUrl")
+        logger.info("RapidOCR API Provider initialized with URL: $apiUrl (using RestClient)")
     }
 
     /** 이미지에서 텍스트를 추출합니다. */
     override fun extractText(imageBytes: ByteArray): OcrRawResult {
         return try {
             logger.info("Starting OCR extraction via RapidOCR API...")
-
-            // Multipart form-data 설정
-            val headers = HttpHeaders()
-            headers.contentType = MediaType.MULTIPART_FORM_DATA
 
             // 이미지를 Resource로 변환
             val imageResource =
@@ -54,11 +63,15 @@ class PaddleOcrApiProvider(
             val body = LinkedMultiValueMap<String, Any>()
             body.add("image_file", imageResource)
 
-            val requestEntity = HttpEntity(body, headers)
-
-            // API 호출
+            // RestClient를 사용한 Fluent API 호출
             val responseStr =
-                    restTemplate.postForObject("$apiUrl/ocr", requestEntity, String::class.java)
+                    restClient
+                            .post()
+                            .uri("/ocr")
+                            .contentType(MediaType.MULTIPART_FORM_DATA)
+                            .body(body)
+                            .retrieve()
+                            .body(String::class.java)
 
             if (responseStr.isNullOrEmpty()) {
                 logger.error("RapidOCR API returned empty response")

@@ -13,4 +13,7 @@ dependencies {
     // LangChain4j - Gemma3 (Ollama) 연동용 (백업)
     implementation("dev.langchain4j:langchain4j:0.36.2")
     implementation("dev.langchain4j:langchain4j-ollama:0.36.2")
+
+    // Spring AI - Ollama 연동 (Primary)
+    implementation("org.springframework.ai:spring-ai-ollama-spring-boot-starter")
 }

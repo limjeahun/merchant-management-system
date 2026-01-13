@@ -21,9 +21,9 @@ class LangChainConfig(
         @Value("\${ollama.temperature:0.1}") private val temperature: Double
 ) {
 
-    /** OllamaChatModel Bean */
-    @Bean
-    fun ollamaChatModel(): OllamaChatModel {
+    /** LangChain4j용 OllamaChatModel Bean (Spring AI의 ollamaChatModel과 구분) */
+    @Bean("langChainChatModel")
+    fun langChainChatModel(): OllamaChatModel {
         val timeout = parseTimeout(timeoutStr)
 
         return OllamaChatModel.builder()
@@ -37,17 +37,17 @@ class LangChainConfig(
 
     /** BusinessLicenseAgent Bean (AiServices 프록시) - 사업자등록증 전용 */
     @Bean
-    fun businessLicenseAgent(chatModel: OllamaChatModel): BusinessLicenseAgent {
+    fun businessLicenseAgent(langChainChatModel: OllamaChatModel): BusinessLicenseAgent {
         return AiServices.builder(BusinessLicenseAgent::class.java)
-                .chatLanguageModel(chatModel)
+                .chatLanguageModel(langChainChatModel)
                 .build()
     }
 
     /** OcrDocumentAgent Bean (AiServices 프록시) - 모든 문서 유형 */
     @Bean
-    fun ocrDocumentAgent(chatModel: OllamaChatModel): com.provider.gemma.OcrDocumentAgent {
+    fun ocrDocumentAgent(langChainChatModel: OllamaChatModel): com.provider.gemma.OcrDocumentAgent {
         return AiServices.builder(com.provider.gemma.OcrDocumentAgent::class.java)
-                .chatLanguageModel(chatModel)
+                .chatLanguageModel(langChainChatModel)
                 .build()
     }
 
