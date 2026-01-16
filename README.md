@@ -9,6 +9,8 @@
 
 가맹점 관리 시스템의 Backend입니다. 사업자등록증 OCR 기능을 제공합니다.
 
+> **Frontend 저장소**: [limjeahun/OCR](https://github.com/limjeahun/OCR)
+
 ## 주요 기능
 
 - 사업자등록증/주민등록증/운전면허증 OCR
@@ -72,6 +74,7 @@ Kafka, Redis, MySQL, OCR 엔진들이 실행됩니다.
 
 ### 3. Frontend 실행
 
+[Frontend 저장소](https://github.com/limjeahun/OCR) 참고
 
 ## API
 
