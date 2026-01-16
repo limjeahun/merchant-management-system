@@ -1,5 +1,12 @@
 # Merchant Management System (Backend)
 
+![Kotlin](https://img.shields.io/badge/Kotlin-1.9.25-7F52FF?style=flat&logo=kotlin&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.8-6DB33F?style=flat&logo=spring-boot&logoColor=white)
+![Apache Kafka](https://img.shields.io/badge/Apache%20Kafka-3.9.1-231F20?style=flat&logo=apache-kafka&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-7.0-DC382D?style=flat&logo=redis&logoColor=white)
+![Gemma3](https://img.shields.io/badge/Gemma3-LLM-8E75B2?style=flat&logo=google&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat&logo=docker&logoColor=white)
+
 가맹점 관리 시스템의 Backend입니다. 사업자등록증 OCR 기능을 제공합니다.
 
 > **Frontend 저장소**: [limjeahun/OCR](https://github.com/limjeahun/OCR)
